@@ -1,4 +1,4 @@
--- name: CreateCase :one
+-- name: AddCase :one
 INSERT INTO cases (
     id, 
     title, 
@@ -22,4 +22,16 @@ ORDER BY created_at DESC;
 
 -- name: DeleteCase :exec
 DELETE FROM cases
+WHERE id = $1;
+
+-- name: UpdateTitle :exec
+UPDATE cases
+SET title = $2,
+    updated_at = $3
+WHERE id = $1;
+
+-- name: UpdateDescription :exec
+UPDATE cases
+SET description = $2,
+    updated_at = $3
 WHERE id = $1;

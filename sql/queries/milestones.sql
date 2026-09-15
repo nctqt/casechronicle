@@ -1,15 +1,14 @@
--- name: CreateMilestone :one
+-- name: AddMilestone :one
 INSERT INTO milestones (
     id,
     case_id,
     title,
     description,
     event_date,
-    date_precision,
     created_at,
     updated_at
 ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: ListMilestonesByCase :many
@@ -26,4 +25,22 @@ LIMIT 1;
 
 -- name: DeleteMilestone :exec
 DELETE FROM milestones
+WHERE id = $1;
+
+-- name: UpdateTitle :exec
+UPDATE milestones
+SET title = $2,
+    updated_at = $3
+WHERE id = $1;
+
+-- name: UpdateDescription :exec
+UPDATE milestones
+SET description = $2,
+    updated_at = $3
+WHERE id = $1;
+
+-- name: UpdateEventDate :exec
+UPDATE milestones
+SET event_date = $2,
+    updated_at = $3
 WHERE id = $1;

@@ -1,33 +1,24 @@
--- name: CreateVideo :one
+-- name: AddVideo :one
 INSERT INTO videos (
     id,
     milestone_id,
     youtube_video_id,
     title,
     channel_name,
-    description,
+    status,
+    category,
+    ai_summary
+    raw_transcript
+    estimated_event_date,
+    enriched_date,
+    summary_source,
     published_at,
     created_at,
     updated_at,
-    category,
-    status,
-    raw_transcript
 ) 
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING *;
-
--- name: UpdateVideoAnalysis :one
-UPDATE videos
-SET 
-    category = $2,
-    ai_summary = $3,
-    estimated_event_date = $4,
-    summary_source = $5,
-    status = $6,
-    updated_at = $7
-WHERE id = $1
 RETURNING *;
 
 -- name: GetVideoByID :one
@@ -36,10 +27,19 @@ FROM videos
 WHERE id = $1
 LIMIT 1;
 
--- name: ListVideosByMilestoneIDs :many
+-- name: ListVideos :many
+SELECT *
+FROM videos
+ORDER BY created_at DESC;
+
+-- name: DeleteVideo :exec
+DELETE FROM videos
+WHERE id = $1;
+
+-- name: ListVideosByMilestone :many
 SELECT * 
 FROM videos
-WHERE milestone_id = ANY(sqlc.slice('milestone_ids')::uuid[])
+WHERE milestone_id = ANY(sqlc.slice('milestone_id')::uuid[])
   AND status IN ('analyzed', 'approved')
 ORDER BY COALESCE(estimated_event_date, published_at) ASC;
 
@@ -49,11 +49,29 @@ FROM videos
 WHERE milestone_id IS NULL
 ORDER BY published_at DESC;
 
--- name: ListPendingVideos :many
+-- name: ListVideosByStatus :many
 SELECT *
 FROM videos
-WHERE status = 'pending_review'
+WHERE status = $1
 ORDER BY created_at DESC;
+
+-- name: ListVideosNotEnriched :many
+SELECT *
+FROM videos
+WHERE enriched_date IS NULL -- tie to ai_summary
+ORDER BY created_at DESC;
+
+-- name: ListVideosBySummarySource :many
+SELECT *
+FROM videos
+WHERE summary_source = $1
+ORDER BY created_at DESC;
+
+-- name: ListVideosMissingTranscripts :many
+SELECT * 
+FROM videos
+WHERE raw_transcript IS NULL 
+ORDER BY created_at ASC;
 
 -- name: LinkVideoToMilestone :exec
 UPDATE videos
@@ -74,14 +92,6 @@ SET status = $2,
     updated_at = $3
 WHERE id = $1;
 
--- name: GetPendingTranscripts :many
-SELECT * 
-FROM videos
-WHERE raw_transcript IS NOT NULL 
-  AND transcript_processed_at IS NULL
-ORDER BY created_at ASC
-LIMIT $1;
-
 -- name: UpdateVideoTranscript :exec
 UPDATE videos
 SET raw_transcript = $2,
@@ -94,7 +104,19 @@ SET category = $2,
     updated_at = $3
 WHERE id = $1;
 
--- name: GetVideos :many
-SELECT *
-FROM videos
-ORDER BY created_at DESC;
+-- name: UpdateVideoEstimatedEventDate :exec
+UPDATE videos
+SET estimated_event_date = $2,
+    updated_at = $3
+WHERE id = $1;
+
+-- name: UpdateVideoSummary :one
+UPDATE videos
+SET 
+    ai_summary = $2,
+    estimated_event_date = $3,
+    summary_source = $4,
+    status = $5,
+    updated_at = $6
+WHERE id = $1
+RETURNING *;
