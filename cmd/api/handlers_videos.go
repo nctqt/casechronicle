@@ -58,11 +58,12 @@ func (cfg *apiConfig) handlerAddVideo(w http.ResponseWriter, r *http.Request) {
 		YoutubeVideoID: ytMeta.ID,
 		Title:          ytMeta.Title,
 		ChannelName:    ytMeta.ChannelName,
+		Description:    &ytMeta.Description,
 		PublishedAt:    ytMeta.PublishedAt,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		Category:       "uncategorized",
-		Status:         "pending", // default status
+		Status:         "pending",
 	})
 	if err != nil {
 		// check if the error is a pgx unique constraint violation (SQLSTATE 23505)
@@ -402,14 +403,8 @@ func (cfg *apiConfig) handlerDeleteVideo(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type UpdateVideoSummaryRequest struct {
-	AiSummary          *string      `json:"ai_summary"`
-	EstimatedEventDate sql.NullTime `json:"estimated_event_date"`
-	SummarySource      string       `json:"summary_source"`
-	Status             string       `json:"status"`
-}
-
 func (cfg *apiConfig) handlerEnrichVideo(w http.ResponseWriter, r *http.Request) {
+	// get id from path
 	videoIDStr := r.PathValue("video_id")
 	videoID, err := uuid.Parse(videoIDStr)
 	if err != nil {

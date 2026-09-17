@@ -5,6 +5,7 @@ INSERT INTO videos (
     youtube_video_id,
     title,
     channel_name,
+    description,
     status,
     category,
     ai_summary,
@@ -17,7 +18,7 @@ INSERT INTO videos (
     updated_at
 ) 
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
 RETURNING *;
 

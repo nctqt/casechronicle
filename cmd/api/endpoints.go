@@ -54,7 +54,7 @@ func registerEndpoints(apiCfg *apiConfig) {
 	apiCfg.mux.HandleFunc("PATCH /api/v1/videos/{video_id}/status", apiCfg.adminMiddleware(apiCfg.handlerUpdateVideoStatus))
 	apiCfg.mux.HandleFunc("PATCH /api/v1/videos/{video_id}/transcript", apiCfg.adminMiddleware(apiCfg.handlerUpdateVideoTranscript))
 	apiCfg.mux.HandleFunc("PATCH /api/v1/videos/{video_id}/event_date", apiCfg.adminMiddleware(apiCfg.handlerUpdateVideoEstimatedEventDate))
-	apiCfg.mux.HandleFunc("DELETE /api/v1/videos/{video_id}", apiCfg.adminMiddleware(apiCfg.handlerDeleteMilestone))
+	apiCfg.mux.HandleFunc("DELETE /api/v1/videos/{video_id}", apiCfg.adminMiddleware(apiCfg.handlerDeleteVideo))
 	apiCfg.mux.HandleFunc("PUT /api/v1/milestones/{milestone_id}/videos/{video_id}", apiCfg.adminMiddleware(apiCfg.handlerLinkVideoToMilestone))
 	apiCfg.mux.HandleFunc("DELETE /api/v1/milestones/{milestone_id}/videos/{video_id}", apiCfg.adminMiddleware(apiCfg.handlerUnlinkVideoFromMilestone))
 }

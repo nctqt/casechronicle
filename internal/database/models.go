@@ -43,6 +43,7 @@ type Video struct {
 	YoutubeVideoID     string        `json:"youtube_video_id"`
 	Title              string        `json:"title"`
 	ChannelName        string        `json:"channel_name"`
+	Description        *string       `json:"description"`
 	Status             string        `json:"status"`
 	Category           string        `json:"category"`
 	AiSummary          *string       `json:"ai_summary"`

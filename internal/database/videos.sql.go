@@ -21,6 +21,7 @@ INSERT INTO videos (
     youtube_video_id,
     title,
     channel_name,
+    description,
     status,
     category,
     ai_summary,
@@ -33,9 +34,9 @@ INSERT INTO videos (
     updated_at
 ) 
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
-RETURNING id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+RETURNING id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 `
 
 type AddVideoParams struct {
@@ -44,6 +45,7 @@ type AddVideoParams struct {
 	YoutubeVideoID     string        `json:"youtube_video_id"`
 	Title              string        `json:"title"`
 	ChannelName        string        `json:"channel_name"`
+	Description        *string       `json:"description"`
 	Status             string        `json:"status"`
 	Category           string        `json:"category"`
 	AiSummary          *string       `json:"ai_summary"`
@@ -63,6 +65,7 @@ func (q *Queries) AddVideo(ctx context.Context, arg AddVideoParams) (Video, erro
 		arg.YoutubeVideoID,
 		arg.Title,
 		arg.ChannelName,
+		arg.Description,
 		arg.Status,
 		arg.Category,
 		arg.AiSummary,
@@ -81,6 +84,7 @@ func (q *Queries) AddVideo(ctx context.Context, arg AddVideoParams) (Video, erro
 		&i.YoutubeVideoID,
 		&i.Title,
 		&i.ChannelName,
+		&i.Description,
 		&i.Status,
 		&i.Category,
 		&i.AiSummary,
@@ -106,7 +110,7 @@ func (q *Queries) DeleteVideo(ctx context.Context, id uuid.UUID) error {
 }
 
 const getVideoByID = `-- name: GetVideoByID :one
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 WHERE id = $1
 LIMIT 1
@@ -121,6 +125,7 @@ func (q *Queries) GetVideoByID(ctx context.Context, id uuid.UUID) (Video, error)
 		&i.YoutubeVideoID,
 		&i.Title,
 		&i.ChannelName,
+		&i.Description,
 		&i.Status,
 		&i.Category,
 		&i.AiSummary,
@@ -155,7 +160,7 @@ func (q *Queries) LinkVideoToMilestone(ctx context.Context, arg LinkVideoToMiles
 }
 
 const listUnlinkedVideos = `-- name: ListUnlinkedVideos :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
 FROM videos
 WHERE milestone_id IS NULL
 ORDER BY published_at DESC
@@ -176,6 +181,7 @@ func (q *Queries) ListUnlinkedVideos(ctx context.Context) ([]Video, error) {
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -201,7 +207,7 @@ func (q *Queries) ListUnlinkedVideos(ctx context.Context) ([]Video, error) {
 }
 
 const listVideos = `-- name: ListVideos :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 ORDER BY created_at DESC
 `
@@ -221,6 +227,7 @@ func (q *Queries) ListVideos(ctx context.Context) ([]Video, error) {
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -246,7 +253,7 @@ func (q *Queries) ListVideos(ctx context.Context) ([]Video, error) {
 }
 
 const listVideosByMilestone = `-- name: ListVideosByMilestone :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
 FROM videos
 WHERE milestone_id = ANY($1::uuid[])
   AND status IN ('analyzed', 'approved')
@@ -268,6 +275,7 @@ func (q *Queries) ListVideosByMilestone(ctx context.Context, milestoneID []uuid.
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -293,7 +301,7 @@ func (q *Queries) ListVideosByMilestone(ctx context.Context, milestoneID []uuid.
 }
 
 const listVideosByStatus = `-- name: ListVideosByStatus :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 WHERE status = $1
 ORDER BY created_at DESC
@@ -314,6 +322,7 @@ func (q *Queries) ListVideosByStatus(ctx context.Context, status string) ([]Vide
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -339,7 +348,7 @@ func (q *Queries) ListVideosByStatus(ctx context.Context, status string) ([]Vide
 }
 
 const listVideosBySummarySource = `-- name: ListVideosBySummarySource :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 WHERE summary_source = $1
 ORDER BY created_at DESC
@@ -360,6 +369,7 @@ func (q *Queries) ListVideosBySummarySource(ctx context.Context, summarySource s
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -385,7 +395,7 @@ func (q *Queries) ListVideosBySummarySource(ctx context.Context, summarySource s
 }
 
 const listVideosMissingTranscripts = `-- name: ListVideosMissingTranscripts :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
 FROM videos
 WHERE raw_transcript IS NULL 
 ORDER BY created_at ASC
@@ -406,6 +416,7 @@ func (q *Queries) ListVideosMissingTranscripts(ctx context.Context) ([]Video, er
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -431,7 +442,7 @@ func (q *Queries) ListVideosMissingTranscripts(ctx context.Context) ([]Video, er
 }
 
 const listVideosNotEnriched = `-- name: ListVideosNotEnriched :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 WHERE enriched_date IS NULL -- tie to ai_summary
 ORDER BY created_at DESC
@@ -452,6 +463,7 @@ func (q *Queries) ListVideosNotEnriched(ctx context.Context) ([]Video, error) {
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
+			&i.Description,
 			&i.Status,
 			&i.Category,
 			&i.AiSummary,
@@ -556,7 +568,7 @@ SET
     status = $5,
     updated_at = $6
 WHERE id = $1
-RETURNING id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+RETURNING id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 `
 
 type UpdateVideoSummaryParams struct {
@@ -584,6 +596,7 @@ func (q *Queries) UpdateVideoSummary(ctx context.Context, arg UpdateVideoSummary
 		&i.YoutubeVideoID,
 		&i.Title,
 		&i.ChannelName,
+		&i.Description,
 		&i.Status,
 		&i.Category,
 		&i.AiSummary,

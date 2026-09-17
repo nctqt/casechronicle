@@ -25,6 +25,7 @@ CREATE TABLE videos (
     youtube_video_id VARCHAR(50) UNIQUE NOT NULL,
     title VARCHAR(255) NOT NULL,
     channel_name VARCHAR(255) NOT NULL,
+    description TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'pending_review',
     category VARCHAR(50) NOT NULL, -- 'news', 'speculation', 'podcast'
     ai_summary TEXT,
