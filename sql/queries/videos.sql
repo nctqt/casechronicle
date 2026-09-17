@@ -7,14 +7,14 @@ INSERT INTO videos (
     channel_name,
     status,
     category,
-    ai_summary
-    raw_transcript
+    ai_summary,
+    raw_transcript,
     estimated_event_date,
     enriched_date,
     summary_source,
     published_at,
     created_at,
-    updated_at,
+    updated_at
 ) 
 VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15

@@ -24,13 +24,13 @@ ORDER BY created_at DESC;
 DELETE FROM cases
 WHERE id = $1;
 
--- name: UpdateTitle :exec
+-- name: UpdateCaseTitle :exec
 UPDATE cases
 SET title = $2,
     updated_at = $3
 WHERE id = $1;
 
--- name: UpdateDescription :exec
+-- name: UpdateCaseDescription :exec
 UPDATE cases
 SET description = $2,
     updated_at = $3

@@ -26,15 +26,15 @@ CREATE TABLE videos (
     title VARCHAR(255) NOT NULL,
     channel_name VARCHAR(255) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pending_review',
-    category VARCHAR(50) NOT NULL -- 'news', 'speculation', 'podcast'
+    category VARCHAR(50) NOT NULL, -- 'news', 'speculation', 'podcast'
     ai_summary TEXT,
     raw_transcript TEXT,
     estimated_event_date TIMESTAMPTZ,
     enriched_date TIMESTAMPTZ,
-    summary_source VARCHAR(20) NOT NULL DEFAULT 'metadata';
+    summary_source VARCHAR(20) NOT NULL DEFAULT 'metadata',
     published_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX idx_videos_milestone_id ON videos(milestone_id);

@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const createCase = `-- name: CreateCase :one
+const addCase = `-- name: AddCase :one
 INSERT INTO cases (
     id, 
     title, 
@@ -24,7 +24,7 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING id, title, description, created_at, updated_at
 `
 
-type CreateCaseParams struct {
+type AddCaseParams struct {
 	ID          uuid.UUID `json:"id"`
 	Title       string    `json:"title"`
 	Description *string   `json:"description"`
@@ -32,8 +32,8 @@ type CreateCaseParams struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func (q *Queries) CreateCase(ctx context.Context, arg CreateCaseParams) (Case, error) {
-	row := q.db.QueryRowContext(ctx, createCase,
+func (q *Queries) AddCase(ctx context.Context, arg AddCaseParams) (Case, error) {
+	row := q.db.QueryRowContext(ctx, addCase,
 		arg.ID,
 		arg.Title,
 		arg.Description,
@@ -114,4 +114,40 @@ func (q *Queries) ListCases(ctx context.Context) ([]Case, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCaseDescription = `-- name: UpdateCaseDescription :exec
+UPDATE cases
+SET description = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateCaseDescriptionParams struct {
+	ID          uuid.UUID `json:"id"`
+	Description *string   `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCaseDescription(ctx context.Context, arg UpdateCaseDescriptionParams) error {
+	_, err := q.db.ExecContext(ctx, updateCaseDescription, arg.ID, arg.Description, arg.UpdatedAt)
+	return err
+}
+
+const updateCaseTitle = `-- name: UpdateCaseTitle :exec
+UPDATE cases
+SET title = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateCaseTitleParams struct {
+	ID        uuid.UUID `json:"id"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCaseTitle(ctx context.Context, arg UpdateCaseTitleParams) error {
+	_, err := q.db.ExecContext(ctx, updateCaseTitle, arg.ID, arg.Title, arg.UpdatedAt)
+	return err
 }

@@ -14,56 +14,65 @@ import (
 	"github.com/lib/pq"
 )
 
-const createVideo = `-- name: CreateVideo :one
+const addVideo = `-- name: AddVideo :one
 INSERT INTO videos (
     id,
     milestone_id,
     youtube_video_id,
     title,
     channel_name,
-    description,
+    status,
+    category,
+    ai_summary,
+    raw_transcript,
+    estimated_event_date,
+    enriched_date,
+    summary_source,
     published_at,
     created_at,
-    updated_at,
-    category,
-    status,
-    raw_transcript
+    updated_at
 ) 
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source
+RETURNING id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 `
 
-type CreateVideoParams struct {
-	ID             uuid.UUID     `json:"id"`
-	MilestoneID    uuid.NullUUID `json:"milestone_id"`
-	YoutubeVideoID string        `json:"youtube_video_id"`
-	Title          string        `json:"title"`
-	ChannelName    string        `json:"channel_name"`
-	Description    string        `json:"description"`
-	PublishedAt    time.Time     `json:"published_at"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
-	Category       string        `json:"category"`
-	Status         string        `json:"status"`
-	RawTranscript  *string       `json:"raw_transcript"`
+type AddVideoParams struct {
+	ID                 uuid.UUID     `json:"id"`
+	MilestoneID        uuid.NullUUID `json:"milestone_id"`
+	YoutubeVideoID     string        `json:"youtube_video_id"`
+	Title              string        `json:"title"`
+	ChannelName        string        `json:"channel_name"`
+	Status             string        `json:"status"`
+	Category           string        `json:"category"`
+	AiSummary          *string       `json:"ai_summary"`
+	RawTranscript      *string       `json:"raw_transcript"`
+	EstimatedEventDate sql.NullTime  `json:"estimated_event_date"`
+	EnrichedDate       sql.NullTime  `json:"enriched_date"`
+	SummarySource      string        `json:"summary_source"`
+	PublishedAt        time.Time     `json:"published_at"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
 }
 
-func (q *Queries) CreateVideo(ctx context.Context, arg CreateVideoParams) (Video, error) {
-	row := q.db.QueryRowContext(ctx, createVideo,
+func (q *Queries) AddVideo(ctx context.Context, arg AddVideoParams) (Video, error) {
+	row := q.db.QueryRowContext(ctx, addVideo,
 		arg.ID,
 		arg.MilestoneID,
 		arg.YoutubeVideoID,
 		arg.Title,
 		arg.ChannelName,
-		arg.Description,
+		arg.Status,
+		arg.Category,
+		arg.AiSummary,
+		arg.RawTranscript,
+		arg.EstimatedEventDate,
+		arg.EnrichedDate,
+		arg.SummarySource,
 		arg.PublishedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.Category,
-		arg.Status,
-		arg.RawTranscript,
 	)
 	var i Video
 	err := row.Scan(
@@ -72,72 +81,32 @@ func (q *Queries) CreateVideo(ctx context.Context, arg CreateVideoParams) (Video
 		&i.YoutubeVideoID,
 		&i.Title,
 		&i.ChannelName,
-		&i.Description,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Category,
 		&i.Status,
+		&i.Category,
 		&i.AiSummary,
 		&i.RawTranscript,
 		&i.EstimatedEventDate,
-		&i.TranscriptProcessedAt,
+		&i.EnrichedDate,
 		&i.SummarySource,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getPendingTranscripts = `-- name: GetPendingTranscripts :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source 
-FROM videos
-WHERE raw_transcript IS NOT NULL 
-  AND transcript_processed_at IS NULL
-ORDER BY created_at ASC
-LIMIT $1
+const deleteVideo = `-- name: DeleteVideo :exec
+DELETE FROM videos
+WHERE id = $1
 `
 
-func (q *Queries) GetPendingTranscripts(ctx context.Context, limit int32) ([]Video, error) {
-	rows, err := q.db.QueryContext(ctx, getPendingTranscripts, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Video
-	for rows.Next() {
-		var i Video
-		if err := rows.Scan(
-			&i.ID,
-			&i.MilestoneID,
-			&i.YoutubeVideoID,
-			&i.Title,
-			&i.ChannelName,
-			&i.Description,
-			&i.PublishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Category,
-			&i.Status,
-			&i.AiSummary,
-			&i.RawTranscript,
-			&i.EstimatedEventDate,
-			&i.TranscriptProcessedAt,
-			&i.SummarySource,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) DeleteVideo(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteVideo, id)
+	return err
 }
 
 const getVideoByID = `-- name: GetVideoByID :one
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
 WHERE id = $1
 LIMIT 1
@@ -152,65 +121,18 @@ func (q *Queries) GetVideoByID(ctx context.Context, id uuid.UUID) (Video, error)
 		&i.YoutubeVideoID,
 		&i.Title,
 		&i.ChannelName,
-		&i.Description,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Category,
 		&i.Status,
+		&i.Category,
 		&i.AiSummary,
 		&i.RawTranscript,
 		&i.EstimatedEventDate,
-		&i.TranscriptProcessedAt,
+		&i.EnrichedDate,
 		&i.SummarySource,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getVideos = `-- name: GetVideos :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source
-FROM videos
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetVideos(ctx context.Context) ([]Video, error) {
-	rows, err := q.db.QueryContext(ctx, getVideos)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Video
-	for rows.Next() {
-		var i Video
-		if err := rows.Scan(
-			&i.ID,
-			&i.MilestoneID,
-			&i.YoutubeVideoID,
-			&i.Title,
-			&i.ChannelName,
-			&i.Description,
-			&i.PublishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Category,
-			&i.Status,
-			&i.AiSummary,
-			&i.RawTranscript,
-			&i.EstimatedEventDate,
-			&i.TranscriptProcessedAt,
-			&i.SummarySource,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const linkVideoToMilestone = `-- name: LinkVideoToMilestone :exec
@@ -232,55 +154,8 @@ func (q *Queries) LinkVideoToMilestone(ctx context.Context, arg LinkVideoToMiles
 	return err
 }
 
-const listPendingVideos = `-- name: ListPendingVideos :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source
-FROM videos
-WHERE status = 'pending_review'
-ORDER BY created_at DESC
-`
-
-func (q *Queries) ListPendingVideos(ctx context.Context) ([]Video, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingVideos)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Video
-	for rows.Next() {
-		var i Video
-		if err := rows.Scan(
-			&i.ID,
-			&i.MilestoneID,
-			&i.YoutubeVideoID,
-			&i.Title,
-			&i.ChannelName,
-			&i.Description,
-			&i.PublishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Category,
-			&i.Status,
-			&i.AiSummary,
-			&i.RawTranscript,
-			&i.EstimatedEventDate,
-			&i.TranscriptProcessedAt,
-			&i.SummarySource,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUnlinkedVideos = `-- name: ListUnlinkedVideos :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source 
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
 FROM videos
 WHERE milestone_id IS NULL
 ORDER BY published_at DESC
@@ -301,17 +176,16 @@ func (q *Queries) ListUnlinkedVideos(ctx context.Context) ([]Video, error) {
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
-			&i.Description,
-			&i.PublishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Category,
 			&i.Status,
+			&i.Category,
 			&i.AiSummary,
 			&i.RawTranscript,
 			&i.EstimatedEventDate,
-			&i.TranscriptProcessedAt,
+			&i.EnrichedDate,
 			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -326,16 +200,14 @@ func (q *Queries) ListUnlinkedVideos(ctx context.Context) ([]Video, error) {
 	return items, nil
 }
 
-const listVideosByMilestoneIDs = `-- name: ListVideosByMilestoneIDs :many
-SELECT id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source 
+const listVideos = `-- name: ListVideos :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
-WHERE milestone_id = ANY($1::uuid[])
-  AND status IN ('analyzed', 'approved')
-ORDER BY COALESCE(estimated_event_date, published_at) ASC
+ORDER BY created_at DESC
 `
 
-func (q *Queries) ListVideosByMilestoneIDs(ctx context.Context, milestoneIds []uuid.UUID) ([]Video, error) {
-	rows, err := q.db.QueryContext(ctx, listVideosByMilestoneIDs, pq.Array(milestoneIds))
+func (q *Queries) ListVideos(ctx context.Context) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideos)
 	if err != nil {
 		return nil, err
 	}
@@ -349,17 +221,247 @@ func (q *Queries) ListVideosByMilestoneIDs(ctx context.Context, milestoneIds []u
 			&i.YoutubeVideoID,
 			&i.Title,
 			&i.ChannelName,
-			&i.Description,
-			&i.PublishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Category,
 			&i.Status,
+			&i.Category,
 			&i.AiSummary,
 			&i.RawTranscript,
 			&i.EstimatedEventDate,
-			&i.TranscriptProcessedAt,
+			&i.EnrichedDate,
 			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideosByMilestone = `-- name: ListVideosByMilestone :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
+FROM videos
+WHERE milestone_id = ANY($1::uuid[])
+  AND status IN ('analyzed', 'approved')
+ORDER BY COALESCE(estimated_event_date, published_at) ASC
+`
+
+func (q *Queries) ListVideosByMilestone(ctx context.Context, milestoneID []uuid.UUID) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideosByMilestone, pq.Array(milestoneID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Video
+	for rows.Next() {
+		var i Video
+		if err := rows.Scan(
+			&i.ID,
+			&i.MilestoneID,
+			&i.YoutubeVideoID,
+			&i.Title,
+			&i.ChannelName,
+			&i.Status,
+			&i.Category,
+			&i.AiSummary,
+			&i.RawTranscript,
+			&i.EstimatedEventDate,
+			&i.EnrichedDate,
+			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideosByStatus = `-- name: ListVideosByStatus :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+FROM videos
+WHERE status = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListVideosByStatus(ctx context.Context, status string) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideosByStatus, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Video
+	for rows.Next() {
+		var i Video
+		if err := rows.Scan(
+			&i.ID,
+			&i.MilestoneID,
+			&i.YoutubeVideoID,
+			&i.Title,
+			&i.ChannelName,
+			&i.Status,
+			&i.Category,
+			&i.AiSummary,
+			&i.RawTranscript,
+			&i.EstimatedEventDate,
+			&i.EnrichedDate,
+			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideosBySummarySource = `-- name: ListVideosBySummarySource :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+FROM videos
+WHERE summary_source = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListVideosBySummarySource(ctx context.Context, summarySource string) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideosBySummarySource, summarySource)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Video
+	for rows.Next() {
+		var i Video
+		if err := rows.Scan(
+			&i.ID,
+			&i.MilestoneID,
+			&i.YoutubeVideoID,
+			&i.Title,
+			&i.ChannelName,
+			&i.Status,
+			&i.Category,
+			&i.AiSummary,
+			&i.RawTranscript,
+			&i.EstimatedEventDate,
+			&i.EnrichedDate,
+			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideosMissingTranscripts = `-- name: ListVideosMissingTranscripts :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at 
+FROM videos
+WHERE raw_transcript IS NULL 
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListVideosMissingTranscripts(ctx context.Context) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideosMissingTranscripts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Video
+	for rows.Next() {
+		var i Video
+		if err := rows.Scan(
+			&i.ID,
+			&i.MilestoneID,
+			&i.YoutubeVideoID,
+			&i.Title,
+			&i.ChannelName,
+			&i.Status,
+			&i.Category,
+			&i.AiSummary,
+			&i.RawTranscript,
+			&i.EstimatedEventDate,
+			&i.EnrichedDate,
+			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVideosNotEnriched = `-- name: ListVideosNotEnriched :many
+SELECT id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+FROM videos
+WHERE enriched_date IS NULL -- tie to ai_summary
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListVideosNotEnriched(ctx context.Context) ([]Video, error) {
+	rows, err := q.db.QueryContext(ctx, listVideosNotEnriched)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Video
+	for rows.Next() {
+		var i Video
+		if err := rows.Scan(
+			&i.ID,
+			&i.MilestoneID,
+			&i.YoutubeVideoID,
+			&i.Title,
+			&i.ChannelName,
+			&i.Status,
+			&i.Category,
+			&i.AiSummary,
+			&i.RawTranscript,
+			&i.EstimatedEventDate,
+			&i.EnrichedDate,
+			&i.SummarySource,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -391,61 +493,6 @@ func (q *Queries) UnlinkVideoFromMilestone(ctx context.Context, arg UnlinkVideoF
 	return err
 }
 
-const updateVideoAnalysis = `-- name: UpdateVideoAnalysis :one
-UPDATE videos
-SET 
-    category = $2,
-    ai_summary = $3,
-    estimated_event_date = $4,
-    summary_source = $5,
-    status = $6,
-    updated_at = $7
-WHERE id = $1
-RETURNING id, milestone_id, youtube_video_id, title, channel_name, description, published_at, created_at, updated_at, category, status, ai_summary, raw_transcript, estimated_event_date, transcript_processed_at, summary_source
-`
-
-type UpdateVideoAnalysisParams struct {
-	ID                 uuid.UUID    `json:"id"`
-	Category           string       `json:"category"`
-	AiSummary          *string      `json:"ai_summary"`
-	EstimatedEventDate sql.NullTime `json:"estimated_event_date"`
-	SummarySource      string       `json:"summary_source"`
-	Status             string       `json:"status"`
-	UpdatedAt          time.Time    `json:"updated_at"`
-}
-
-func (q *Queries) UpdateVideoAnalysis(ctx context.Context, arg UpdateVideoAnalysisParams) (Video, error) {
-	row := q.db.QueryRowContext(ctx, updateVideoAnalysis,
-		arg.ID,
-		arg.Category,
-		arg.AiSummary,
-		arg.EstimatedEventDate,
-		arg.SummarySource,
-		arg.Status,
-		arg.UpdatedAt,
-	)
-	var i Video
-	err := row.Scan(
-		&i.ID,
-		&i.MilestoneID,
-		&i.YoutubeVideoID,
-		&i.Title,
-		&i.ChannelName,
-		&i.Description,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Category,
-		&i.Status,
-		&i.AiSummary,
-		&i.RawTranscript,
-		&i.EstimatedEventDate,
-		&i.TranscriptProcessedAt,
-		&i.SummarySource,
-	)
-	return i, err
-}
-
 const updateVideoCategory = `-- name: UpdateVideoCategory :exec
 UPDATE videos
 SET category = $2,
@@ -461,6 +508,24 @@ type UpdateVideoCategoryParams struct {
 
 func (q *Queries) UpdateVideoCategory(ctx context.Context, arg UpdateVideoCategoryParams) error {
 	_, err := q.db.ExecContext(ctx, updateVideoCategory, arg.ID, arg.Category, arg.UpdatedAt)
+	return err
+}
+
+const updateVideoEstimatedEventDate = `-- name: UpdateVideoEstimatedEventDate :exec
+UPDATE videos
+SET estimated_event_date = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateVideoEstimatedEventDateParams struct {
+	ID                 uuid.UUID    `json:"id"`
+	EstimatedEventDate sql.NullTime `json:"estimated_event_date"`
+	UpdatedAt          time.Time    `json:"updated_at"`
+}
+
+func (q *Queries) UpdateVideoEstimatedEventDate(ctx context.Context, arg UpdateVideoEstimatedEventDateParams) error {
+	_, err := q.db.ExecContext(ctx, updateVideoEstimatedEventDate, arg.ID, arg.EstimatedEventDate, arg.UpdatedAt)
 	return err
 }
 
@@ -480,6 +545,57 @@ type UpdateVideoStatusParams struct {
 func (q *Queries) UpdateVideoStatus(ctx context.Context, arg UpdateVideoStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateVideoStatus, arg.ID, arg.Status, arg.UpdatedAt)
 	return err
+}
+
+const updateVideoSummary = `-- name: UpdateVideoSummary :one
+UPDATE videos
+SET 
+    ai_summary = $2,
+    estimated_event_date = $3,
+    summary_source = $4,
+    status = $5,
+    updated_at = $6
+WHERE id = $1
+RETURNING id, milestone_id, youtube_video_id, title, channel_name, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
+`
+
+type UpdateVideoSummaryParams struct {
+	ID                 uuid.UUID    `json:"id"`
+	AiSummary          *string      `json:"ai_summary"`
+	EstimatedEventDate sql.NullTime `json:"estimated_event_date"`
+	SummarySource      string       `json:"summary_source"`
+	Status             string       `json:"status"`
+	UpdatedAt          time.Time    `json:"updated_at"`
+}
+
+func (q *Queries) UpdateVideoSummary(ctx context.Context, arg UpdateVideoSummaryParams) (Video, error) {
+	row := q.db.QueryRowContext(ctx, updateVideoSummary,
+		arg.ID,
+		arg.AiSummary,
+		arg.EstimatedEventDate,
+		arg.SummarySource,
+		arg.Status,
+		arg.UpdatedAt,
+	)
+	var i Video
+	err := row.Scan(
+		&i.ID,
+		&i.MilestoneID,
+		&i.YoutubeVideoID,
+		&i.Title,
+		&i.ChannelName,
+		&i.Status,
+		&i.Category,
+		&i.AiSummary,
+		&i.RawTranscript,
+		&i.EstimatedEventDate,
+		&i.EnrichedDate,
+		&i.SummarySource,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateVideoTranscript = `-- name: UpdateVideoTranscript :exec

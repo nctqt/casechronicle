@@ -13,18 +13,18 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nctqt/casechronicle/internal/database"
 	"github.com/nctqt/casechronicle/internal/jsonhelp"
+	"github.com/nctqt/casechronicle/internal/worker"
 )
 
-type CreateVideoRequest struct {
+type AddVideoRequest struct {
 	URL         string     `json:"url"`
 	MilestoneID *uuid.UUID `json:"milestone_id,omitempty"`
 }
 
-func (cfg *apiConfig) handlerCreateVideo(w http.ResponseWriter, r *http.Request) {
-	var req CreateVideoRequest
+func (cfg *apiConfig) handlerAddVideo(w http.ResponseWriter, r *http.Request) {
+	var req AddVideoRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		// Return the exact Go decoding error to see what failed
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
@@ -52,13 +52,12 @@ func (cfg *apiConfig) handlerCreateVideo(w http.ResponseWriter, r *http.Request)
 
 	// push to db
 	now := time.Now().UTC()
-	newVideo, err := cfg.queries.CreateVideo(r.Context(), database.CreateVideoParams{
+	newVideo, err := cfg.queries.AddVideo(r.Context(), database.AddVideoParams{
 		ID:             uuid.New(),
 		MilestoneID:    milestoneID,
 		YoutubeVideoID: ytMeta.ID,
 		Title:          ytMeta.Title,
 		ChannelName:    ytMeta.ChannelName,
-		Description:    ytMeta.Description,
 		PublishedAt:    ytMeta.PublishedAt,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -99,13 +98,73 @@ func (cfg *apiConfig) handlerListVideosByMilestone(w http.ResponseWriter, r *htt
 	}
 
 	// Pass a slice of uuid.UUID containing just this one ID
-	videos, err := cfg.queries.ListVideosByMilestoneIDs(r.Context(), []uuid.UUID{milestoneUUID})
+	videos, err := cfg.queries.ListVideosByMilestone(r.Context(), []uuid.UUID{milestoneUUID})
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not gather videos by milestone", err)
 		return
 	}
 
 	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+}
+
+func (cfg *apiConfig) handlerListVideosMissingTranscripts(w http.ResponseWriter, r *http.Request) {
+	videos, err := cfg.queries.ListVideosMissingTranscripts(r.Context())
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not gather videos without transcripts", err)
+		return
+	}
+	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+}
+
+func (cfg *apiConfig) handlerListVideosNotEnriched(w http.ResponseWriter, r *http.Request) {
+	videos, err := cfg.queries.ListVideosNotEnriched(r.Context())
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not gather videos without enrichment", err)
+		return
+	}
+	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+}
+
+type ListVideosBySummarySourceRequest struct {
+	Source string `json:"source"`
+}
+
+func (cfg *apiConfig) handlerListVideosBySummarySource(w http.ResponseWriter, r *http.Request) {
+	var req ListVideosBySummarySourceRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+	}
+
+	videos, err := cfg.queries.ListVideosBySummarySource(r.Context(), req.Source)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not gather videos by summary source", err)
+		return
+	}
+	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type ListVideosByStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func (cfg *apiConfig) handlerListVideosByStatus(w http.ResponseWriter, r *http.Request) {
+	var req ListVideosByStatusRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+	}
+
+	videos, err := cfg.queries.ListVideosByStatus(r.Context(), req.Status)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not gather videos by status", err)
+		return
+	}
+	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (cfg *apiConfig) handlerGetVideoByID(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +246,7 @@ type UpdateVideoStatusParams struct {
 	Status string    `json:"status"`
 }
 
-func (cfg *apiConfig) handlerUpdateVideoStatus(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerUpdateVideoStatus(w http.ResponseWriter, r *http.Request) { // take a look at this for functionality
 	videoID := r.PathValue("video_id")
 	videoUUID, err := uuid.Parse(videoID)
 	if err != nil {
@@ -252,8 +311,68 @@ func (cfg *apiConfig) handlerUpdateVideoCategory(w http.ResponseWriter, r *http.
 	w.Write([]byte(`{"message": "Category updated successfully"}`))
 }
 
-func (cfg *apiConfig) handlerGetVideos(w http.ResponseWriter, r *http.Request) {
-	videos, err := cfg.queries.GetVideos(r.Context())
+type UpdateVideoEstimatedEventDateRequest struct {
+	EventdDate sql.NullTime `json:"event_date"`
+}
+
+func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter, r *http.Request) {
+	var req UpdateVideoEstimatedEventDateRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+	}
+
+	id := r.PathValue("video_id")
+	userUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	now := time.Now().UTC()
+	err = cfg.queries.UpdateVideoEstimatedEventDate(r.Context(), database.UpdateVideoEstimatedEventDateParams{
+		ID:                 userUUID,
+		EstimatedEventDate: req.EventdDate,
+		UpdatedAt:          now,
+	})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpdateVideoTranscriptRequest struct {
+	RawTranscript *string `json:"event_date"`
+}
+
+func (cfg *apiConfig) handlerUpdateVideoTranscript(w http.ResponseWriter, r *http.Request) {
+	var req UpdateVideoTranscriptRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+	}
+
+	id := r.PathValue("video_id")
+	userUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	now := time.Now().UTC()
+	err = cfg.queries.UpdateVideoTranscript(r.Context(), database.UpdateVideoTranscriptParams{
+		ID:            userUUID,
+		RawTranscript: req.RawTranscript,
+		UpdatedAt:     now,
+	})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpdateVideoStatusRequest struct {
+	EventdDate sql.NullTime `json:"event_date"`
+}
+
+func (cfg *apiConfig) handlerListVideos(w http.ResponseWriter, r *http.Request) {
+	videos, err := cfg.queries.ListVideos(r.Context())
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			jsonhelp.RespondWithError(w, http.StatusNotFound, "Videos not found", err)
@@ -264,4 +383,62 @@ func (cfg *apiConfig) handlerGetVideos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonhelp.RespondWithJSON(w, http.StatusOK, videos)
+}
+
+func (cfg *apiConfig) handlerDeleteVideo(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("video_id")
+	UUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	err = cfg.queries.DeleteVideo(r.Context(), UUID)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not delete video", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpdateVideoSummaryRequest struct {
+	AiSummary          *string      `json:"ai_summary"`
+	EstimatedEventDate sql.NullTime `json:"estimated_event_date"`
+	SummarySource      string       `json:"summary_source"`
+	Status             string       `json:"status"`
+}
+
+func (cfg *apiConfig) handlerEnrichVideo(w http.ResponseWriter, r *http.Request) {
+	videoIDStr := r.PathValue("video_id")
+	videoID, err := uuid.Parse(videoIDStr)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid video ID format", err)
+		return
+	}
+
+	// optional quick check: ensure video exists before queuing
+	_, err = cfg.queries.GetVideoByID(r.Context(), videoID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			jsonhelp.RespondWithError(w, http.StatusNotFound, "Video not found", err)
+			return
+		}
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Database error retrieving video", err)
+		return
+	}
+
+	// enqueue the job for the worker pool
+	enqueued := cfg.wp.Enqueue(worker.Task{VideoID: videoID})
+	if !enqueued {
+		jsonhelp.RespondWithError(w, http.StatusServiceUnavailable, "Enrichment queue is full", nil)
+		return
+	}
+
+	// immediate 202 response
+	jsonhelp.RespondWithJSON(w, http.StatusAccepted, map[string]string{
+		"message":  "Video enrichment enqueued successfully",
+		"video_id": videoID.String(),
+		"status":   "pending review",
+	})
 }

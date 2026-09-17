@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/nctqt/casechronicle/internal/database"
 	"github.com/nctqt/casechronicle/internal/jsonhelp"
 	"github.com/nctqt/casechronicle/internal/openrouter"
-	"github.com/nctqt/casechronicle/internal/worker"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (cfg *apiConfig) processVideoEnrichment(ctx context.Context, videoID uuid.UUID) (err error) {
@@ -84,7 +85,6 @@ func (cfg *apiConfig) processVideoEnrichment(ctx context.Context, videoID uuid.U
 	// prepare OpenRouter request
 	analysisReq := openrouter.AnalysisRequest{
 		Title:         video.Title,
-		Description:   video.Description,
 		ChannelName:   video.ChannelName,
 		RawTranscript: trimmedTranscript,
 	}
@@ -111,9 +111,8 @@ func (cfg *apiConfig) processVideoEnrichment(ctx context.Context, videoID uuid.U
 	}
 
 	// update video analysis in database
-	_, err = cfg.queries.UpdateVideoAnalysis(ctx, database.UpdateVideoAnalysisParams{
+	_, err = cfg.queries.UpdateVideoSummary(ctx, database.UpdateVideoSummaryParams{
 		ID:                 video.ID,
-		Category:           category,
 		AiSummary:          &aiResult.Summary,
 		EstimatedEventDate: estimatedEventDate,
 		SummarySource:      aiResult.SummarySource,
@@ -128,36 +127,65 @@ func (cfg *apiConfig) processVideoEnrichment(ctx context.Context, videoID uuid.U
 	return nil
 }
 
-func (cfg *apiConfig) handlerEnrichVideo(w http.ResponseWriter, r *http.Request) {
-	videoIDStr := r.PathValue("video_id")
-	videoID, err := uuid.Parse(videoIDStr)
+func (cfg *apiConfig) updateVideoSummary(w http.ResponseWriter, r *http.Request) {
+	var req UpdateVideoSummaryRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid video ID format", err)
-		return
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
 	}
 
-	// optional quick check: ensure video exists before queuing
-	_, err = cfg.queries.GetVideoByID(r.Context(), videoID)
+	id := r.PathValue("video_id")
+	videoUUID, err := uuid.Parse(id)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			jsonhelp.RespondWithError(w, http.StatusNotFound, "Video not found", err)
-			return
-		}
-		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Database error retrieving video", err)
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
 		return
 	}
 
-	// enqueue the job for the worker pool
-	enqueued := cfg.wp.Enqueue(worker.Task{VideoID: videoID})
-	if !enqueued {
-		jsonhelp.RespondWithError(w, http.StatusServiceUnavailable, "Enrichment queue is full", nil)
-		return
-	}
-
-	// immediate 202 response
-	jsonhelp.RespondWithJSON(w, http.StatusAccepted, map[string]string{
-		"message":  "Video enrichment enqueued successfully",
-		"video_id": videoID.String(),
-		"status":   "pending review",
+	now := time.Now().UTC()
+	_, err = cfg.queries.UpdateVideoSummary(r.Context(), database.UpdateVideoSummaryParams{
+		ID:                 videoUUID,
+		AiSummary:          req.AiSummary,
+		EstimatedEventDate: req.EstimatedEventDate,
+		SummarySource:      req.SummarySource,
+		Status:             req.Status,
+		UpdatedAt:          now,
 	})
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (cfg *apiConfig) updatePassword(w http.ResponseWriter, r *http.Request) {
+	var req UpdatePasswordRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not update password", err)
+	}
+
+	id := r.PathValue("user_id")
+	userUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	if len(req.Password) < 8 {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Password must be at least 8 characters long", nil)
+		return
+	}
+
+	// hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not hash password", err)
+		return
+	}
+
+	now := time.Now().UTC()
+	err = cfg.queries.UpdatePassword(r.Context(), database.UpdatePasswordParams{
+		ID:             userUUID,
+		HashedPassword: string(hashedPassword),
+		UpdatedAt:      now,
+	})
+
+	w.WriteHeader(http.StatusNoContent)
 }

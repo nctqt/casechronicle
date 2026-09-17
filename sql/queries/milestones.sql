@@ -27,13 +27,13 @@ LIMIT 1;
 DELETE FROM milestones
 WHERE id = $1;
 
--- name: UpdateTitle :exec
+-- name: UpdateMilestoneTitle :exec
 UPDATE milestones
 SET title = $2,
     updated_at = $3
 WHERE id = $1;
 
--- name: UpdateDescription :exec
+-- name: UpdateMilestoneDescription :exec
 UPDATE milestones
 SET description = $2,
     updated_at = $3

@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const createUser = `-- name: CreateUser :one
+const addUser = `-- name: AddUser :one
 INSERT INTO users (id, email, hashed_password, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, email, hashed_password, created_at, updated_at
 `
 
-type CreateUserParams struct {
+type AddUserParams struct {
 	ID             uuid.UUID `json:"id"`
 	Email          string    `json:"email"`
 	HashedPassword string    `json:"hashed_password"`
@@ -26,8 +26,8 @@ type CreateUserParams struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser,
+func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, addUser,
 		arg.ID,
 		arg.Email,
 		arg.HashedPassword,
@@ -43,6 +43,16 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users
+WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -83,48 +93,27 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getWatchHistoryByUserID = `-- name: GetWatchHistoryByUserID :many
-SELECT 
-    wh.id AS watch_id,
-    wh.watched_at,
-    wh.completed,
-    v.id AS video_id,
-    v.youtube_video_id,
-    v.title,
-    v.channel_name
-FROM watch_history wh
-JOIN videos v ON wh.video_id = v.id
-WHERE wh.user_id = $1
-ORDER BY wh.watched_at DESC
+const listUsers = `-- name: ListUsers :many
+SELECT id, email, hashed_password, created_at, updated_at 
+FROM users
+ORDER BY created_at DESC
 `
 
-type GetWatchHistoryByUserIDRow struct {
-	WatchID        uuid.UUID `json:"watch_id"`
-	WatchedAt      time.Time `json:"watched_at"`
-	Completed      bool      `json:"completed"`
-	VideoID        uuid.UUID `json:"video_id"`
-	YoutubeVideoID string    `json:"youtube_video_id"`
-	Title          string    `json:"title"`
-	ChannelName    string    `json:"channel_name"`
-}
-
-func (q *Queries) GetWatchHistoryByUserID(ctx context.Context, userID uuid.UUID) ([]GetWatchHistoryByUserIDRow, error) {
-	rows, err := q.db.QueryContext(ctx, getWatchHistoryByUserID, userID)
+func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetWatchHistoryByUserIDRow
+	var items []User
 	for rows.Next() {
-		var i GetWatchHistoryByUserIDRow
+		var i User
 		if err := rows.Scan(
-			&i.WatchID,
-			&i.WatchedAt,
-			&i.Completed,
-			&i.VideoID,
-			&i.YoutubeVideoID,
-			&i.Title,
-			&i.ChannelName,
+			&i.ID,
+			&i.Email,
+			&i.HashedPassword,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -139,39 +128,20 @@ func (q *Queries) GetWatchHistoryByUserID(ctx context.Context, userID uuid.UUID)
 	return items, nil
 }
 
-const recordVideoWatch = `-- name: RecordVideoWatch :one
-INSERT INTO watch_history (id, user_id, video_id, watched_at, completed)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id, video_id) 
-DO UPDATE SET 
-    watched_at = EXCLUDED.watched_at,
-    completed = EXCLUDED.completed
-RETURNING id, user_id, video_id, watched_at, completed
+const updatePassword = `-- name: UpdatePassword :exec
+UPDATE users
+SET hashed_password = $2,
+    updated_at = $3
+WHERE id = $1
 `
 
-type RecordVideoWatchParams struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	VideoID   uuid.UUID `json:"video_id"`
-	WatchedAt time.Time `json:"watched_at"`
-	Completed bool      `json:"completed"`
+type UpdatePasswordParams struct {
+	ID             uuid.UUID `json:"id"`
+	HashedPassword string    `json:"hashed_password"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-func (q *Queries) RecordVideoWatch(ctx context.Context, arg RecordVideoWatchParams) (WatchHistory, error) {
-	row := q.db.QueryRowContext(ctx, recordVideoWatch,
-		arg.ID,
-		arg.UserID,
-		arg.VideoID,
-		arg.WatchedAt,
-		arg.Completed,
-	)
-	var i WatchHistory
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.VideoID,
-		&i.WatchedAt,
-		&i.Completed,
-	)
-	return i, err
+func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error {
+	_, err := q.db.ExecContext(ctx, updatePassword, arg.ID, arg.HashedPassword, arg.UpdatedAt)
+	return err
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/nctqt/casechronicle/internal/jsonhelp"
 )
 
-type RegisterUserRequest struct {
+type AddUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -44,24 +44,8 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-// helper to generate JWT signed with secret key
-func (cfg *apiConfig) makeJWT(userID uuid.UUID, role string, expiresIn time.Duration) (string, error) {
-	claims := CustomClaims{
-		Role: role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "casechronicle",
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
-			Subject:   userID.String(),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(cfg.jwtSecret))
-}
-
-func (cfg *apiConfig) handlerRegisterUser(w http.ResponseWriter, r *http.Request) {
-	var req RegisterUserRequest
+func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
+	var req AddUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid request payload", err)
 		return
@@ -86,7 +70,7 @@ func (cfg *apiConfig) handlerRegisterUser(w http.ResponseWriter, r *http.Request
 	}
 
 	now := time.Now().UTC()
-	newUser, err := cfg.queries.CreateUser(r.Context(), database.CreateUserParams{
+	newUser, err := cfg.queries.AddUser(r.Context(), database.AddUserParams{
 		ID:             uuid.New(),
 		Email:          email,
 		HashedPassword: string(hashedPassword),
@@ -175,4 +159,80 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		},
 		Token: token,
 	})
+}
+
+func (cfg *apiConfig) handlerGetUserByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("user_id")
+	userUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	user, err := cfg.queries.GetUserByID(r.Context(), userUUID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonhelp.RespondWithError(w, http.StatusNotFound, "User not found", err)
+			return
+		}
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not retrieve user", err)
+		return
+	}
+
+	jsonhelp.RespondWithJSON(w, http.StatusOK, user)
+}
+
+type GetUserByEmailRequest struct {
+	Email string `json:"email"`
+}
+
+func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Request) {
+	var req GetUserByEmailRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could get user", err)
+	}
+
+	user, err := cfg.queries.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			jsonhelp.RespondWithError(w, http.StatusNotFound, "User not found", err)
+			return
+		}
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not retrieve user", err)
+		return
+	}
+
+	jsonhelp.RespondWithJSON(w, http.StatusOK, user)
+}
+
+func (cfg *apiConfig) handlerListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := cfg.queries.ListUsers(r.Context())
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not list users", err)
+		return
+	}
+
+	jsonhelp.RespondWithJSON(w, http.StatusOK, users)
+}
+
+func (cfg *apiConfig) handlerDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("user_id")
+	userUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+
+	err = cfg.queries.DeleteUser(r.Context(), userUUID)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not delete user", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpdatePasswordRequest struct {
+	Password string `json:"password"`
 }
