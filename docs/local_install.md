@@ -26,6 +26,25 @@ OPENROUTER_API_KEY= from openrouter.ai (this uses the free version)
 JWT_SECRET= generate a jwt secret
 ```
 
+### Docker
+Create docker-compose.yml for the postgres database using alpine:
+```
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
 ### Run
 In backend folder:
 ```
