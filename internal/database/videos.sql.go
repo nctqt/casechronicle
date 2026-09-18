@@ -444,7 +444,7 @@ func (q *Queries) ListVideosMissingTranscripts(ctx context.Context) ([]Video, er
 const listVideosNotEnriched = `-- name: ListVideosNotEnriched :many
 SELECT id, milestone_id, youtube_video_id, title, channel_name, description, status, category, ai_summary, raw_transcript, estimated_event_date, enriched_date, summary_source, published_at, created_at, updated_at
 FROM videos
-WHERE enriched_date IS NULL -- tie to ai_summary
+WHERE status IN ('pending', 'failed', 'analyzing')
 ORDER BY created_at DESC
 `
 

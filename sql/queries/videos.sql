@@ -59,7 +59,7 @@ ORDER BY created_at DESC;
 -- name: ListVideosNotEnriched :many
 SELECT *
 FROM videos
-WHERE enriched_date IS NULL -- tie to ai_summary
+WHERE status IN ('pending', 'failed', 'analyzing')
 ORDER BY created_at DESC;
 
 -- name: ListVideosBySummarySource :many

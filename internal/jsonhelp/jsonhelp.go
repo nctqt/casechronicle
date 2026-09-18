@@ -50,12 +50,7 @@ func CleanJSONOutput(raw string) string {
 
 	extracted := strings.TrimSpace(cleaned[startIdx : endIdx+1])
 
-	// Verify if extracted string is valid JSON
-	var js json.RawMessage
-	if json.Unmarshal([]byte(extracted), &js) != nil {
-		// If unmarshaling fails due to truncation within the object, return original raw output
-		return cleaned
-	}
-
+	// Always return the extracted JSON bracket span.
+	// Let the main unmarshal handler deal with syntax errors rather than falling back to preamble text.
 	return extracted
 }

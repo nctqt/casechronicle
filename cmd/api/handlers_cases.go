@@ -103,6 +103,7 @@ func (cfg *apiConfig) handlerUpdateCaseDescription(w http.ResponseWriter, r *htt
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not update description", err)
+		return
 	}
 	id := r.PathValue("case_id")
 	caseUUID, err := uuid.Parse(id)
@@ -116,6 +117,10 @@ func (cfg *apiConfig) handlerUpdateCaseDescription(w http.ResponseWriter, r *htt
 		Description: req.Description,
 		UpdatedAt:   now,
 	})
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not update description", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -128,6 +133,7 @@ func (cfg *apiConfig) handlerUpdateCaseTitle(w http.ResponseWriter, r *http.Requ
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not update title", err)
+		return
 	}
 	id := r.PathValue("case_id")
 	caseUUID, err := uuid.Parse(id)
@@ -141,6 +147,10 @@ func (cfg *apiConfig) handlerUpdateCaseTitle(w http.ResponseWriter, r *http.Requ
 		Title:     req.Title,
 		UpdatedAt: now,
 	})
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not update title", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

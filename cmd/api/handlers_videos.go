@@ -50,20 +50,26 @@ func (cfg *apiConfig) handlerAddVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var eventDate = sql.NullTime{
+		Time:  ytMeta.PublishedAt,
+		Valid: true,
+	}
+
 	// push to db
 	now := time.Now().UTC()
 	newVideo, err := cfg.queries.AddVideo(r.Context(), database.AddVideoParams{
-		ID:             uuid.New(),
-		MilestoneID:    milestoneID,
-		YoutubeVideoID: ytMeta.ID,
-		Title:          ytMeta.Title,
-		ChannelName:    ytMeta.ChannelName,
-		Description:    &ytMeta.Description,
-		PublishedAt:    ytMeta.PublishedAt,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-		Category:       "uncategorized",
-		Status:         "pending",
+		ID:                 uuid.New(),
+		MilestoneID:        milestoneID,
+		YoutubeVideoID:     ytMeta.ID,
+		Title:              ytMeta.Title,
+		ChannelName:        ytMeta.ChannelName,
+		Description:        &ytMeta.Description,
+		PublishedAt:        ytMeta.PublishedAt,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		Category:           "uncategorized",
+		Status:             "pending",
+		EstimatedEventDate: eventDate,
 	})
 	if err != nil {
 		// check if the error is a pgx unique constraint violation (SQLSTATE 23505)
@@ -135,6 +141,7 @@ func (cfg *apiConfig) handlerListVideosBySummarySource(w http.ResponseWriter, r 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+		return
 	}
 
 	videos, err := cfg.queries.ListVideosBySummarySource(r.Context(), req.Source)
@@ -156,6 +163,7 @@ func (cfg *apiConfig) handlerListVideosByStatus(w http.ResponseWriter, r *http.R
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+		return
 	}
 
 	videos, err := cfg.queries.ListVideosByStatus(r.Context(), req.Status)
@@ -313,7 +321,7 @@ func (cfg *apiConfig) handlerUpdateVideoCategory(w http.ResponseWriter, r *http.
 }
 
 type UpdateVideoEstimatedEventDateRequest struct {
-	EventdDate sql.NullTime `json:"event_date"`
+	EventDate string `json:"event_date"`
 }
 
 func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter, r *http.Request) {
@@ -321,6 +329,7 @@ func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+		return
 	}
 
 	id := r.PathValue("video_id")
@@ -330,12 +339,32 @@ func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter
 		return
 	}
 
+	// Parse the incoming string into sql.NullTime
+	var nullTime sql.NullTime
+	if req.EventDate != "" && req.EventDate != "null" {
+		parsedTime, err := time.Parse("2006-01-02", req.EventDate) // HTML date inputs send "YYYY-MM-DD"
+		if err != nil {
+			jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid date format, expected YYYY-MM-DD", err)
+			return
+		}
+		nullTime = sql.NullTime{
+			Time:  parsedTime,
+			Valid: true,
+		}
+	} else {
+		nullTime = sql.NullTime{Valid: false} // Clears the date if empty
+	}
+
 	now := time.Now().UTC()
 	err = cfg.queries.UpdateVideoEstimatedEventDate(r.Context(), database.UpdateVideoEstimatedEventDateParams{
 		ID:                 userUUID,
-		EstimatedEventDate: req.EventdDate,
+		EstimatedEventDate: nullTime,
 		UpdatedAt:          now,
 	})
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not update estimated event date", err)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -349,6 +378,7 @@ func (cfg *apiConfig) handlerUpdateVideoTranscript(w http.ResponseWriter, r *htt
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not parse body", err)
+		return
 	}
 
 	id := r.PathValue("video_id")

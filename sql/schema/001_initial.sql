@@ -44,7 +44,7 @@ CREATE INDEX idx_videos_status ON videos(status);
 
 CREATE INDEX idx_videos_transcript_pending 
     ON videos(id) 
-    WHERE transcript_processed_date IS NULL AND raw_transcript IS NOT NULL;
+    WHERE enriched_date IS NULL AND raw_transcript IS NOT NULL;
 
 CREATE INDEX idx_videos_milestone_status_event_date 
 ON videos (milestone_id, status, COALESCE(estimated_event_date, published_at) ASC);
