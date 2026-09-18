@@ -1,4 +1,4 @@
--- name: CreateUser :one
+-- name: AddUser :one
 INSERT INTO users (id, email, hashed_password, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
@@ -13,25 +13,17 @@ SELECT *
 FROM users
 WHERE id = $1;
 
--- name: RecordVideoWatch :one
-INSERT INTO watch_history (id, user_id, video_id, watched_at, completed)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id, video_id) 
-DO UPDATE SET 
-    watched_at = EXCLUDED.watched_at,
-    completed = EXCLUDED.completed
-RETURNING *;
+-- name: ListUsers :many
+SELECT * 
+FROM users
+ORDER BY created_at DESC;
 
--- name: GetWatchHistoryByUserID :many
-SELECT 
-    wh.id AS watch_id,
-    wh.watched_at,
-    wh.completed,
-    v.id AS video_id,
-    v.youtube_video_id,
-    v.title,
-    v.channel_name
-FROM watch_history wh
-JOIN videos v ON wh.video_id = v.id
-WHERE wh.user_id = $1
-ORDER BY wh.watched_at DESC;
+-- name: DeleteUser :exec
+DELETE FROM users
+WHERE id = $1;
+
+-- name: UpdatePassword :exec
+UPDATE users
+SET hashed_password = $2,
+    updated_at = $3
+WHERE id = $1;

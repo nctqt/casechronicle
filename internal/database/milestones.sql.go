@@ -12,40 +12,37 @@ import (
 	"github.com/google/uuid"
 )
 
-const createMilestone = `-- name: CreateMilestone :one
+const addMilestone = `-- name: AddMilestone :one
 INSERT INTO milestones (
     id,
     case_id,
     title,
     description,
     event_date,
-    date_precision,
     created_at,
     updated_at
 ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, case_id, title, event_date, created_at, updated_at, description, date_precision
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, case_id, title, description, event_date, created_at, updated_at
 `
 
-type CreateMilestoneParams struct {
-	ID            uuid.UUID `json:"id"`
-	CaseID        uuid.UUID `json:"case_id"`
-	Title         string    `json:"title"`
-	Description   *string   `json:"description"`
-	EventDate     time.Time `json:"event_date"`
-	DatePrecision string    `json:"date_precision"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+type AddMilestoneParams struct {
+	ID          uuid.UUID `json:"id"`
+	CaseID      uuid.UUID `json:"case_id"`
+	Title       string    `json:"title"`
+	Description *string   `json:"description"`
+	EventDate   time.Time `json:"event_date"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func (q *Queries) CreateMilestone(ctx context.Context, arg CreateMilestoneParams) (Milestone, error) {
-	row := q.db.QueryRowContext(ctx, createMilestone,
+func (q *Queries) AddMilestone(ctx context.Context, arg AddMilestoneParams) (Milestone, error) {
+	row := q.db.QueryRowContext(ctx, addMilestone,
 		arg.ID,
 		arg.CaseID,
 		arg.Title,
 		arg.Description,
 		arg.EventDate,
-		arg.DatePrecision,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -54,11 +51,10 @@ func (q *Queries) CreateMilestone(ctx context.Context, arg CreateMilestoneParams
 		&i.ID,
 		&i.CaseID,
 		&i.Title,
+		&i.Description,
 		&i.EventDate,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Description,
-		&i.DatePrecision,
 	)
 	return i, err
 }
@@ -94,7 +90,7 @@ func (q *Queries) GetMilestoneByID(ctx context.Context, id uuid.UUID) (Case, err
 }
 
 const listMilestonesByCase = `-- name: ListMilestonesByCase :many
-SELECT id, case_id, title, event_date, created_at, updated_at, description, date_precision 
+SELECT id, case_id, title, description, event_date, created_at, updated_at 
 FROM milestones
 WHERE case_id = $1
 ORDER BY event_date ASC
@@ -113,11 +109,10 @@ func (q *Queries) ListMilestonesByCase(ctx context.Context, caseID uuid.UUID) ([
 			&i.ID,
 			&i.CaseID,
 			&i.Title,
+			&i.Description,
 			&i.EventDate,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.Description,
-			&i.DatePrecision,
 		); err != nil {
 			return nil, err
 		}
@@ -130,4 +125,58 @@ func (q *Queries) ListMilestonesByCase(ctx context.Context, caseID uuid.UUID) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateEventDate = `-- name: UpdateEventDate :exec
+UPDATE milestones
+SET event_date = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateEventDateParams struct {
+	ID        uuid.UUID `json:"id"`
+	EventDate time.Time `json:"event_date"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateEventDate(ctx context.Context, arg UpdateEventDateParams) error {
+	_, err := q.db.ExecContext(ctx, updateEventDate, arg.ID, arg.EventDate, arg.UpdatedAt)
+	return err
+}
+
+const updateMilestoneDescription = `-- name: UpdateMilestoneDescription :exec
+UPDATE milestones
+SET description = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateMilestoneDescriptionParams struct {
+	ID          uuid.UUID `json:"id"`
+	Description *string   `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateMilestoneDescription(ctx context.Context, arg UpdateMilestoneDescriptionParams) error {
+	_, err := q.db.ExecContext(ctx, updateMilestoneDescription, arg.ID, arg.Description, arg.UpdatedAt)
+	return err
+}
+
+const updateMilestoneTitle = `-- name: UpdateMilestoneTitle :exec
+UPDATE milestones
+SET title = $2,
+    updated_at = $3
+WHERE id = $1
+`
+
+type UpdateMilestoneTitleParams struct {
+	ID        uuid.UUID `json:"id"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateMilestoneTitle(ctx context.Context, arg UpdateMilestoneTitleParams) error {
+	_, err := q.db.ExecContext(ctx, updateMilestoneTitle, arg.ID, arg.Title, arg.UpdatedAt)
+	return err
 }

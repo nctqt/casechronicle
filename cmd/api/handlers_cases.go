@@ -12,13 +12,13 @@ import (
 	"github.com/nctqt/casechronicle/internal/jsonhelp"
 )
 
-type createCaseRequest struct {
+type addCaseRequest struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description"` // optional
 }
 
-func (cfg *apiConfig) handlerCreateCase(w http.ResponseWriter, r *http.Request) {
-	var req createCaseRequest
+func (cfg *apiConfig) handlerAddCase(w http.ResponseWriter, r *http.Request) {
+	var req addCaseRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid request payload", err)
@@ -31,7 +31,7 @@ func (cfg *apiConfig) handlerCreateCase(w http.ResponseWriter, r *http.Request) 
 	}
 
 	now := time.Now().UTC()
-	newCase, err := cfg.queries.CreateCase(r.Context(), database.CreateCaseParams{
+	newCase, err := cfg.queries.AddCase(r.Context(), database.AddCaseParams{
 		ID:          uuid.New(),
 		Title:       req.Title,
 		Description: req.Description, // directly maps to sql.NullString / *string depending on sqlc settings
@@ -39,7 +39,7 @@ func (cfg *apiConfig) handlerCreateCase(w http.ResponseWriter, r *http.Request) 
 		UpdatedAt:   now,
 	})
 	if err != nil {
-		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not create case", err)
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not add case", err)
 		return
 	}
 
@@ -94,6 +94,66 @@ func (cfg *apiConfig) handlerDeleteCase(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type UpdateCaseDescriptionRequest struct {
+	Description *string `json:"description"`
+}
+
+func (cfg *apiConfig) handlerUpdateCaseDescription(w http.ResponseWriter, r *http.Request) {
+	var req UpdateCaseDescriptionRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not update description", err)
+		return
+	}
+	id := r.PathValue("case_id")
+	caseUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+	now := time.Now().UTC()
+	err = cfg.queries.UpdateCaseDescription(r.Context(), database.UpdateCaseDescriptionParams{
+		ID:          caseUUID,
+		Description: req.Description,
+		UpdatedAt:   now,
+	})
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not update description", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpdateCaseTitleRequest struct {
+	Title string `json:"title"`
+}
+
+func (cfg *apiConfig) handlerUpdateCaseTitle(w http.ResponseWriter, r *http.Request) {
+	var req UpdateCaseTitleRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Could not update title", err)
+		return
+	}
+	id := r.PathValue("case_id")
+	caseUUID, err := uuid.Parse(id)
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
+		return
+	}
+	now := time.Now().UTC()
+	err = cfg.queries.UpdateCaseTitle(r.Context(), database.UpdateCaseTitleParams{
+		ID:        caseUUID,
+		Title:     req.Title,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not update title", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type MilestoneWithVideos struct {
 	database.Milestone
 	Videos []database.Video `json:"videos"`
@@ -106,7 +166,7 @@ type CaseTimelineResponse struct {
 
 func (cfg *apiConfig) handlerGetCaseTimeline(w http.ResponseWriter, r *http.Request) {
 	// safely retrieve userID from context (defaults to zero-value uuid.Nil if absent/invalid)
-	userID, ok := r.Context().Value(userIDContextKey).(uuid.UUID)
+	userID, ok := r.Context().Value("userID").(uuid.UUID)
 	isAuthenticated := ok && userID != uuid.Nil
 
 	if isAuthenticated {
@@ -151,7 +211,7 @@ func (cfg *apiConfig) handlerGetCaseTimeline(w http.ResponseWriter, r *http.Requ
 	}
 
 	// 4. Batch fetch videos for ALL milestones at once
-	videos, err := cfg.queries.ListVideosByMilestoneIDs(r.Context(), milestoneIDs)
+	videos, err := cfg.queries.ListVideosByMilestone(r.Context(), milestoneIDs)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not fetch videos", err)
 		return

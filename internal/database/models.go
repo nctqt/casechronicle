@@ -20,14 +20,13 @@ type Case struct {
 }
 
 type Milestone struct {
-	ID            uuid.UUID `json:"id"`
-	CaseID        uuid.UUID `json:"case_id"`
-	Title         string    `json:"title"`
-	EventDate     time.Time `json:"event_date"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Description   *string   `json:"description"`
-	DatePrecision string    `json:"date_precision"`
+	ID          uuid.UUID `json:"id"`
+	CaseID      uuid.UUID `json:"case_id"`
+	Title       string    `json:"title"`
+	Description *string   `json:"description"`
+	EventDate   time.Time `json:"event_date"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type User struct {
@@ -39,28 +38,20 @@ type User struct {
 }
 
 type Video struct {
-	ID                    uuid.UUID     `json:"id"`
-	MilestoneID           uuid.NullUUID `json:"milestone_id"`
-	YoutubeVideoID        string        `json:"youtube_video_id"`
-	Title                 string        `json:"title"`
-	ChannelName           string        `json:"channel_name"`
-	Description           string        `json:"description"`
-	PublishedAt           time.Time     `json:"published_at"`
-	CreatedAt             time.Time     `json:"created_at"`
-	UpdatedAt             time.Time     `json:"updated_at"`
-	Category              string        `json:"category"`
-	Status                string        `json:"status"`
-	AiSummary             *string       `json:"ai_summary"`
-	RawTranscript         *string       `json:"raw_transcript"`
-	EstimatedEventDate    sql.NullTime  `json:"estimated_event_date"`
-	TranscriptProcessedAt sql.NullTime  `json:"transcript_processed_at"`
-	SummarySource         string        `json:"summary_source"`
-}
-
-type WatchHistory struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	VideoID   uuid.UUID `json:"video_id"`
-	WatchedAt time.Time `json:"watched_at"`
-	Completed bool      `json:"completed"`
+	ID                 uuid.UUID     `json:"id"`
+	MilestoneID        uuid.NullUUID `json:"milestone_id"`
+	YoutubeVideoID     string        `json:"youtube_video_id"`
+	Title              string        `json:"title"`
+	ChannelName        string        `json:"channel_name"`
+	Description        *string       `json:"description"`
+	Status             string        `json:"status"`
+	Category           string        `json:"category"`
+	AiSummary          *string       `json:"ai_summary"`
+	RawTranscript      *string       `json:"raw_transcript"`
+	EstimatedEventDate sql.NullTime  `json:"estimated_event_date"`
+	EnrichedDate       sql.NullTime  `json:"enriched_date"`
+	SummarySource      string        `json:"summary_source"`
+	PublishedAt        time.Time     `json:"published_at"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
 }

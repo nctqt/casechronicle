@@ -18,6 +18,7 @@ type WorkerPool struct {
 	enrichFn  func(ctx context.Context, videoID uuid.UUID) error
 }
 
+// a new pool
 func NewWorkerPool(bufferSize int, enrichFn func(ctx context.Context, videoID uuid.UUID) error) *WorkerPool {
 	return &WorkerPool{
 		tasksChan: make(chan Task, bufferSize),
@@ -26,6 +27,8 @@ func NewWorkerPool(bufferSize int, enrichFn func(ctx context.Context, videoID uu
 }
 
 // spawn workers
+// main() asks for 3
+// the goroutines wait for items to hit the tasksChan
 func (wp *WorkerPool) Start(ctx context.Context, numWorkers int) {
 	for i := range numWorkers {
 		wp.wg.Add(1)
@@ -33,7 +36,19 @@ func (wp *WorkerPool) Start(ctx context.Context, numWorkers int) {
 	}
 }
 
-// select events
+// api calls enqueue
+// enqueue attempts to push a task to the queue; returns false if full
+// task -> tasksChan
+func (wp *WorkerPool) Enqueue(task Task) bool {
+	select {
+	case wp.tasksChan <- task:
+		return true
+	default:
+		return false // queue is full
+	}
+}
+
+// waiting for items to hit the tasksChan
 func (wp *WorkerPool) runWorker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 	for {
@@ -63,16 +78,6 @@ func (wp *WorkerPool) processTask(ctx context.Context, workerID int, task Task) 
 	}
 
 	log.Printf("[Worker %d] Successfully enriched video %s", workerID, task.VideoID)
-}
-
-// enqueue attempts to push a task to the queue; returns false if full
-func (wp *WorkerPool) Enqueue(task Task) bool {
-	select {
-	case wp.tasksChan <- task:
-		return true
-	default:
-		return false // queue is full
-	}
 }
 
 // stop closes the channel and waits for all active workers to finish

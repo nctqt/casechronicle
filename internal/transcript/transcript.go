@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,93 +35,45 @@ func NewClient() *Client {
 	}
 }
 
-// FetchTranscript attempts to retrieve and clean captions for a given YouTube video ID.
+// fetchTranscript attempts to retrieve and clean captions for a given YouTube video ID.
+// relies on yt-dlp command line tool
 func (c *Client) FetchTranscript(ctx context.Context, videoID string) (string, error) {
 	if strings.TrimSpace(videoID) == "" {
 		return "", errors.New("videoID cannot be empty")
 	}
 
-	pageURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	url := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
+
+	// yt-dlp to download
+	cmd := exec.Command("yt-dlp",
+		"--write-auto-sub",
+		"--skip-download",
+		"-o", "transcript.%(ext)s",
+		url,
+	)
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to download subtitle: %w", err)
+	}
+
+	// find file
+	matches, err := filepath.Glob("transcript.*.vtt")
+	if err != nil || len(matches) == 0 {
+		return "", fmt.Errorf("subtitle file not found")
+	}
+
+	subFile := matches[0]
+
+	contentBytes, err := os.ReadFile(subFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", fmt.Errorf("failed to read subtitle file: %w", err)
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch video page: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("youtube returned status %d", resp.StatusCode)
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	captionURL := extractCaptionURL(string(bodyBytes))
-	if captionURL == "" {
-		return "", ErrNoTranscriptFound
-	}
-
-	if !strings.Contains(captionURL, "fmt=") {
-		captionURL += "&fmt=vtt"
-	}
-
-	vttReq, err := http.NewRequestWithContext(ctx, http.MethodGet, captionURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create caption request: %w", err)
-	}
-
-	vttResp, err := c.httpClient.Do(vttReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch captions: %w", err)
-	}
-	defer vttResp.Body.Close()
-
-	if vttResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("caption endpoint returned status %d", vttResp.StatusCode)
-	}
-
-	vttBytes, err := io.ReadAll(vttResp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read caption body: %w", err)
-	}
-
-	cleanText := CleanVTT(string(vttBytes))
+	cleanText := CleanVTT(string(contentBytes))
 	if strings.TrimSpace(cleanText) == "" {
 		return "", ErrNoTranscriptFound
 	}
 
 	return cleanText, nil
-}
-
-func extractCaptionURL(html string) string {
-	idx := strings.Index(html, `"captionTracks":`)
-	if idx == -1 {
-		return ""
-	}
-
-	sub := html[idx:]
-	urlIdx := strings.Index(sub, `"baseUrl":"`)
-	if urlIdx == -1 {
-		return ""
-	}
-
-	start := urlIdx + len(`"baseUrl":"`)
-	end := strings.Index(sub[start:], `"`)
-	if end == -1 {
-		return ""
-	}
-
-	rawURL := sub[start : start+end]
-	return strings.ReplaceAll(rawURL, `\u0026`, "&")
 }
 
 // CleanVTT strips WebVTT headers, timecodes, XML tags, numeric cue IDs, and deduplicates repeating lines.

@@ -5,11 +5,28 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/nctqt/casechronicle/internal/jsonhelp"
 )
+
+// helper to generate JWT signed with secret key
+func (cfg *apiConfig) makeJWT(userID uuid.UUID, role string, expiresIn time.Duration) (string, error) {
+	claims := CustomClaims{
+		Role: role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "casechronicle",
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
+			Subject:   userID.String(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(cfg.jwtSecret))
+}
 
 // authenticateRequest parses the Authorization header and returns the userID if valid.
 func (cfg *apiConfig) authenticateRequest(r *http.Request) (uuid.UUID, error) {
@@ -65,7 +82,7 @@ func (cfg *apiConfig) middlewareAuth(handler http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+		ctx := context.WithValue(r.Context(), "userID", userID)
 		handler(w, r.WithContext(ctx))
 	}
 }
@@ -76,7 +93,7 @@ func (cfg *apiConfig) middlewareOptionalAuth(handler http.HandlerFunc) http.Hand
 		userID, err := cfg.authenticateRequest(r)
 		if err == nil {
 			// Token is valid: inject userID into context
-			ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+			ctx := context.WithValue(r.Context(), "userID", userID)
 			r = r.WithContext(ctx)
 		}
 
@@ -124,7 +141,7 @@ func (cfg *apiConfig) adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		subject, err := claims.GetSubject()
 		if err == nil {
 			if userID, err := uuid.Parse(subject); err == nil {
-				ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+				ctx := context.WithValue(r.Context(), "userID", userID)
 				r = r.WithContext(ctx)
 			}
 		}

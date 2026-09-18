@@ -73,9 +73,9 @@ Transcript: %s
 Do NOT include markdown formatting, code blocks, or preamble text.
 Respond ONLY with a valid JSON object matching this schema:
 {
-  "category": "primary_source | news_report | commentary | legal_analysis",
-  "summary": "Concise, factual 2-sentence summary of the specific event covered.",
-  "estimated_event_date": "YYYY-MM-DD or empty string if unknown",
+  "category": "podcast | news broadcast | general | interview | courtroom | creator analysis | police / bodycam,",
+  "summary": "Concise, factual 3-sentence summary of the specific event covered.",
+  "estimated_event_date": "YYYY-MM-DD or empty string if unknown, attempt to extrapolate the date of the event in the video, not the video posting date",
   "key_entities": ["names", "locations"]
 }
 `, input.Title, input.ChannelName, input.Description, transcriptContext)
