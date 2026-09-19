@@ -46,7 +46,7 @@ func registerEndpoints(apiCfg *apiConfig) {
 	apiCfg.mux.HandleFunc("POST /api/v1/videos", apiCfg.adminMiddleware(apiCfg.handlerAddVideo))
 
 	apiCfg.mux.HandleFunc("GET /api/v1/videos/unlinked", apiCfg.adminMiddleware(apiCfg.handlerListUnlinkedVideos))
-	apiCfg.mux.HandleFunc("GET /api/v1/videos/status", apiCfg.adminMiddleware(apiCfg.adminMiddleware(apiCfg.handlerListVideosByStatus)))
+	apiCfg.mux.HandleFunc("GET /api/v1/videos/status", apiCfg.adminMiddleware(apiCfg.handlerListVideosByStatus))
 	apiCfg.mux.HandleFunc("GET /api/v1/videos/summary_source", apiCfg.adminMiddleware(apiCfg.handlerListVideosBySummarySource))
 	apiCfg.mux.HandleFunc("GET /api/v1/videos/not_enriched", apiCfg.adminMiddleware(apiCfg.handlerListVideosNotEnriched))
 	apiCfg.mux.HandleFunc("GET /api/v1/videos/missing_transcripts", apiCfg.adminMiddleware(apiCfg.handlerListVideosMissingTranscripts))
