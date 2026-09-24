@@ -20,7 +20,7 @@ func middlewareCORS(next http.Handler) http.Handler {
 	allowedOrigins := map[string]bool{
 		"http://localhost:5173": true, // Vite React dev server
 		"http://127.0.0.1:5173": true,
-		// "https://yourproductiondomain.com": true,
+		"https://case-chronicle.com": true,
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
