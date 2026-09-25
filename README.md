@@ -6,9 +6,8 @@ Built as a capstone project for the Boot.dev Backend Engineering course, it addr
 
 # https://case-chronicle.com/
 
-- future picture
-##
-- future .gif
+<img width="1128" height="823" alt="image" src="https://github.com/user-attachments/assets/3e3feb8c-c34f-452c-8517-5b2b74745acc" />
+
 
 ## Video Enrichment
 
@@ -20,8 +19,6 @@ subtitles/transcripts to generate:
 
 - An enriched summary that better represents the video's content
 - An estimated event date based on the events discussed in the video
-- Structured context that helps distinguish the event date from the video's
-  publication date
 - Data that helps administrators associate a video with the most relevant
   case milestone
 
