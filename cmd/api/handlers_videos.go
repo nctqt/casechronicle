@@ -333,7 +333,7 @@ func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter
 	}
 
 	id := r.PathValue("video_id")
-	userUUID, err := uuid.Parse(id)
+	videoUUID, err := uuid.Parse(id)
 	if err != nil {
 		jsonhelp.RespondWithError(w, http.StatusBadRequest, "Invalid id format", err)
 		return
@@ -352,12 +352,17 @@ func (cfg *apiConfig) handlerUpdateVideoEstimatedEventDate(w http.ResponseWriter
 			Valid: true,
 		}
 	} else {
-		nullTime = sql.NullTime{Valid: false} // Clears the date if empty
+		video, err := cfg.queries.GetVideoByID(r.Context(), videoUUID)
+		if err != nil {
+			jsonhelp.RespondWithError(w, http.StatusInternalServerError, "Could not retrieve video", err)
+			return
+		}
+		nullTime = sql.NullTime{Time: video.PublishedAt, Valid: true} // fallback date if empty
 	}
 
 	now := time.Now().UTC()
 	err = cfg.queries.UpdateVideoEstimatedEventDate(r.Context(), database.UpdateVideoEstimatedEventDateParams{
-		ID:                 userUUID,
+		ID:                 videoUUID,
 		EstimatedEventDate: nullTime,
 		UpdatedAt:          now,
 	})
